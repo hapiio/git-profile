@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -22,6 +23,8 @@ type Profile struct {
 type Config struct {
 	Profiles map[string]Profile `json:"profiles"`
 }
+
+// ----- Config file handling -----
 
 func defaultConfigPath() (string, error) {
 	cfgDir, err := os.UserConfigDir()
@@ -80,6 +83,9 @@ func saveConfig(cfg *Config, path string) error {
 	return os.Rename(tmp, path)
 }
 
+// ----- Git config helpers -----
+
+// scope: "global" or anything else (treated as local)
 func runGitConfig(scope string, key string, value string) error {
 	args := []string{"config"}
 	if scope == "global" {
@@ -102,6 +108,15 @@ func getGitConfig(key string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func getGitConfigGlobal(key string) (string, error) {
+	cmd := exec.Command("git", "config", "--global", "--get", key)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 func applyProfile(p Profile, scope string) error {
 	if err := runGitConfig(scope, "user.name", p.GitUser); err != nil {
 		return fmt.Errorf("setting user.name: %w", err)
@@ -115,13 +130,24 @@ func applyProfile(p Profile, scope string) error {
 		if err := runGitConfig(scope, "core.sshCommand", sshCmd); err != nil {
 			return fmt.Errorf("setting core.sshCommand: %w", err)
 		}
-	} else if scope == "local" {
+	} else if scope != "global" {
 		// Clear repo-specific sshCommand if present
 		_ = exec.Command("git", "config", "--unset", "core.sshCommand").Run()
 	}
 
 	return nil
 }
+
+func gitDir() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// ----- Commands -----
 
 func cmdAdd(args []string) error {
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
@@ -161,6 +187,8 @@ func cmdAdd(args []string) error {
 }
 
 func cmdList(args []string) error {
+	_ = args
+
 	cfg, _, err := loadConfig()
 	if err != nil {
 		return err
@@ -171,8 +199,15 @@ func cmdList(args []string) error {
 		return nil
 	}
 
+	ids := make([]string, 0, len(cfg.Profiles))
+	for id := range cfg.Profiles {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
 	fmt.Println("Configured profiles:")
-	for id, p := range cfg.Profiles {
+	for _, id := range ids {
+		p := cfg.Profiles[id]
 		ssh := p.SSHKeyPath
 		if ssh == "" {
 			ssh = "(default SSH)"
@@ -240,12 +275,19 @@ func cmdCurrent(args []string) error {
 		fmt.Println("  core.sshCommand = (default)")
 	}
 
+	def, errDef := getGitConfig("gitprofile.default")
+	if errDef == nil && def != "" {
+		fmt.Printf("  gitprofile.default (local) = %s\n", def)
+	}
+	globalDef, errGDef := getGitConfigGlobal("gitprofile.default")
+	if errGDef == nil && globalDef != "" {
+		fmt.Printf("  gitprofile.default (global) = %s\n", globalDef)
+	}
+
 	return nil
 }
 
-func cmdChoose(args []string) error {
-	_ = args
-
+func cmdChoose(_ []string) error {
 	cfg, _, err := loadConfig()
 	if err != nil {
 		return err
@@ -254,13 +296,16 @@ func cmdChoose(args []string) error {
 		return fmt.Errorf("no profiles configured; run `git-profile add` first")
 	}
 
-	fmt.Println("Select profile:")
 	ids := make([]string, 0, len(cfg.Profiles))
-	i := 1
-	for id, p := range cfg.Profiles {
-		fmt.Printf("  [%d] %s: %s <%s>\n", i, id, p.GitUser, p.GitEmail)
+	for id := range cfg.Profiles {
 		ids = append(ids, id)
-		i++
+	}
+	sort.Strings(ids)
+
+	fmt.Println("Select profile:")
+	for i, id := range ids {
+		p := cfg.Profiles[id]
+		fmt.Printf("  [%d] %s: %s <%s>\n", i+1, id, p.GitUser, p.GitEmail)
 	}
 
 	fmt.Print("Enter number: ")
@@ -280,7 +325,7 @@ func cmdChoose(args []string) error {
 	selectedID := ids[choice-1]
 	p := cfg.Profiles[selectedID]
 
-	//alway apply to local repo for choose()
+	// Always apply to local repo for choose()
 	if err := applyProfile(p, "local"); err != nil {
 		return err
 	}
@@ -289,16 +334,129 @@ func cmdChoose(args []string) error {
 	return nil
 }
 
+// set-default: store default profile in git config
+func cmdSetDefault(args []string) error {
+	fs := flag.NewFlagSet("set-default", flag.ExitOnError)
+	scopeGlobal := fs.Bool("global", false, "Set as global default profile")
+	_ = fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: git-profile set-default [--global] <profile-id>")
+	}
+	id := fs.Arg(0)
+
+	cfg, _, err := loadConfig()
+	if err != nil {
+		return err
+	}
+
+	if _, ok := cfg.Profiles[id]; !ok {
+		return fmt.Errorf("profile %q not found", id)
+	}
+
+	scope := "local"
+	if *scopeGlobal {
+		scope = "global"
+	}
+
+	if err := runGitConfig(scope, "gitprofile.default", id); err != nil {
+		return err
+	}
+
+	fmt.Printf("Set %q as %s default profile\n", id, scope)
+	return nil
+}
+
+// ensure: used by hooks
+// 1) If local gitprofile.default exists and matches a profile -> apply it
+// 2) Else if global gitprofile.default exists and matches -> apply it
+// 3) Else -> interactive choose()
+func cmdEnsure(args []string) error {
+	_ = args
+
+	cfg, _, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	if len(cfg.Profiles) == 0 {
+		return fmt.Errorf("no profiles configured; run `git-profile add` first")
+	}
+
+	// 1) Local default
+	if def, err := getGitConfig("gitprofile.default"); err == nil && def != "" {
+		if p, ok := cfg.Profiles[def]; ok {
+			return applyProfile(p, "local")
+		}
+	}
+
+	// 2) Global default
+	if gdef, err := getGitConfigGlobal("gitprofile.default"); err == nil && gdef != "" {
+		if p, ok := cfg.Profiles[gdef]; ok {
+			return applyProfile(p, "local")
+		}
+	}
+
+	// 3) Fallback: interactive
+	return cmdChoose(nil)
+}
+
+// install-hooks: installs prepare-commit-msg & pre-push hooks for this repo
+func cmdInstallHooks(args []string) error {
+	_ = args
+
+	gd, err := gitDir()
+	if err != nil {
+		return fmt.Errorf("not a git repo? %w", err)
+	}
+
+	hooksDir := filepath.Join(gd, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		return err
+	}
+
+	hookContent := `#!/bin/sh
+# git-profile hook: ensure correct profile before commit/push
+git-profile ensure >/dev/null 2>&1 || true
+`
+
+	hooks := []string{"prepare-commit-msg", "pre-push"}
+
+	for _, name := range hooks {
+		path := filepath.Join(hooksDir, name)
+		if err := os.WriteFile(path, []byte(hookContent), 0o755); err != nil {
+			return fmt.Errorf("writing hook %s: %w", name, err)
+		}
+	}
+
+	fmt.Printf("Installed git-profile hooks in %s\n", hooksDir)
+	fmt.Println("From now on, normal `git commit` and `git push` will apply/ask for a profile.")
+	return nil
+}
+
+// ----- Usage / main -----
+
 func usage() {
 	fmt.Println(`git-profile - manage multiple git/GitHub identity profiles
 
 Usage:
-  git-profile add     --id <id> --name "<User Name>" --email "email@example.com" [--ssh-key /path/to/key]
+  git-profile add         --id <id> --name "<User Name>" --email "email@example.com" [--ssh-key /path/to/key]
   git-profile list
-  git-profile use     [--global] <id>
+  git-profile use         [--global] <id>
   git-profile current
-  git-profile choose  (interactive selector; good for wrapping git commit/push)`,
-	)
+  git-profile choose
+  git-profile set-default [--global] <id>
+  git-profile ensure
+  git-profile install-hooks
+
+Commands:
+  add           Add a new identity profile
+  list          List configured profiles
+  use           Apply a profile to this repo or globally
+  current       Show current git identity and defaults
+  choose        Interactively choose a profile and apply locally
+  set-default   Set per-repo or global default profile (stored in git config)
+  ensure        Apply repo default, then global default, otherwise prompt (used by hooks)
+  install-hooks Install hooks so plain 'git commit' and 'git push' call 'git-profile ensure'`)
 }
 
 func main() {
@@ -323,6 +481,12 @@ func main() {
 		err = cmdCurrent(args)
 	case "choose":
 		err = cmdChoose(args)
+	case "set-default":
+		err = cmdSetDefault(args)
+	case "ensure":
+		err = cmdEnsure(args)
+	case "install-hooks":
+		err = cmdInstallHooks(args)
 	case "help", "-h", "--help":
 		usage()
 	default:

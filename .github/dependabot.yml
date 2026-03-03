@@ -9,9 +9,9 @@ updates:
       day: monday
     open-pull-requests-limit: 10
     groups:
-      # Batch all indirect deps into one PR to reduce noise
-      indirect:
-        dependency-type: indirect
+      go-deps:
+        patterns:
+          - "*"
 
   # GitHub Actions
   - package-ecosystem: github-actions

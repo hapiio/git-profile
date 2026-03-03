@@ -1,0 +1,17 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 60%        # minimum overall coverage to keep CI green
+        threshold: 2%      # allow up to 2% drop before failing
+    patch:
+      default:
+        target: 50%        # new code in a PR must have at least 50% coverage
+
+ignore:
+  - "main.go"             # entry point only — nothing to test directly
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false  # always post a comment, even if coverage is unchanged

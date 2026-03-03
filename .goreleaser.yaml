@@ -1,0 +1,156 @@
+version: 2
+
+project_name: git-profile
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: git-profile
+    main: .
+    binary: git-profile
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm        # linux/arm (armv7 — Raspberry Pi, embedded)
+    goarm:
+      - "7"
+    ignore:
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: arm
+      - goos: darwin
+        goarch: arm
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else if eq .Arch "arm" }}armv7
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "Merge pull request"
+      - "Merge branch"
+  groups:
+    - title: "New Features"
+      regexp: "^feat"
+      order: 0
+    - title: "Bug Fixes"
+      regexp: "^fix"
+      order: 1
+    - title: "Other"
+      order: 999
+
+# ── macOS / Linux: Homebrew ────────────────────────────────────────────────
+brews:
+  - repository:
+      owner: hapiio
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_message_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    directory: Formula
+    homepage: "https://github.com/hapiio/git-profile"
+    description: "Manage multiple git identity profiles with a single command"
+    license: "MIT"
+    test: |
+      system "#{bin}/git-profile", "version"
+    install: |
+      bin.install "git-profile"
+      # Shell completions
+      bash_completion.install Utils.safe_popen_read(bin/"git-profile", "completion", "bash") => "git-profile"
+      zsh_completion.install Utils.safe_popen_read(bin/"git-profile", "completion", "zsh") => "_git-profile"
+      fish_completion.install Utils.safe_popen_read(bin/"git-profile", "completion", "fish") => "git-profile.fish"
+
+# ── Windows: Scoop ────────────────────────────────────────────────────────
+# Skipped automatically when SCOOP_BUCKET_TOKEN secret is not configured.
+scoops:
+  - repository:
+      owner: hapiio
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_message_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
+    directory: bucket
+    homepage: "https://github.com/hapiio/git-profile"
+    description: "Manage multiple git identity profiles with a single command"
+    license: MIT
+    skip_upload: "{{ if not .Env.SCOOP_BUCKET_TOKEN }}true{{ end }}"
+
+# ── Arch Linux: AUR ──────────────────────────────────────────────────────
+aurs:
+  - name: git-profile-bin
+    homepage: "https://github.com/hapiio/git-profile"
+    description: "Manage multiple git identity profiles with a single command"
+    maintainers:
+      - "hapiio <hapiio at users dot noreply dot github dot com>"
+    license: MIT
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/git-profile-bin.git"
+    skip_upload: auto   # skip if AUR_KEY secret is not set
+    package: |-
+      install -Dm755 "./git-profile" "${pkgdir}/usr/bin/git-profile"
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/git-profile/LICENSE"
+      install -Dm644 "./README.md" "${pkgdir}/usr/share/doc/git-profile/README.md"
+
+# ── Linux: .deb / .rpm ───────────────────────────────────────────────────
+nfpms:
+  - id: packages
+    package_name: git-profile
+    homepage: https://github.com/hapiio/git-profile
+    maintainer: hapiio <hapiio@users.noreply.github.com>
+    description: Manage multiple git identity profiles with a single command.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/licenses/git-profile/LICENSE
+      - src: ./README.md
+        dst: /usr/share/doc/git-profile/README.md

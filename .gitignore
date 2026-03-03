@@ -1,0 +1,17 @@
+# Binary
+git-profile
+git-profile.exe
+
+# Build artifacts
+dist/
+coverage.out
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# GoReleaser
+/dist

@@ -50,7 +50,7 @@ func captureStdout(t *testing.T, fn func()) string {
 	orig := os.Stdout
 	os.Stdout = w
 	fn()
-	w.Close()
+	w.Close() //nolint:errcheck
 	os.Stdout = orig
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {
@@ -70,7 +70,7 @@ func captureStderr(t *testing.T, fn func()) string {
 	orig := os.Stderr
 	os.Stderr = w
 	fn()
-	w.Close()
+	w.Close() //nolint:errcheck
 	os.Stderr = orig
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {

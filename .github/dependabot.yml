@@ -1,0 +1,22 @@
+version: 2
+
+updates:
+  # Go module dependencies
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Batch all indirect deps into one PR to reduce noise
+      indirect:
+        dependency-type: indirect
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10

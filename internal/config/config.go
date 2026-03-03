@@ -92,7 +92,7 @@ func (m *Manager) Load() (*Config, error) {
 		}
 		return nil, fmt.Errorf("opening config: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only file; close error is inconsequential
 
 	if err := json.NewDecoder(f).Decode(cfg); err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", m.path, err)
@@ -118,18 +118,18 @@ func (m *Manager) Save(cfg *Config) error {
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 	if encErr := enc.Encode(cfg); encErr != nil {
-		f.Close()
-		os.Remove(tmp)
+		f.Close()           //nolint:errcheck // already handling encode error
+		os.Remove(tmp)      //nolint:errcheck // best-effort cleanup
 		return fmt.Errorf("encoding config: %w", encErr)
 	}
 
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		os.Remove(tmp) //nolint:errcheck // best-effort cleanup
 		return fmt.Errorf("flushing config: %w", err)
 	}
 
 	if err := os.Rename(tmp, m.path); err != nil {
-		os.Remove(tmp)
+		os.Remove(tmp) //nolint:errcheck // best-effort cleanup
 		return fmt.Errorf("saving config: %w", err)
 	}
 

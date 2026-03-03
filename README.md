@@ -24,7 +24,7 @@ never accidentally push a personal commit with your work email again.
 - **Interactive picker** — fuzzy-free numbered menu when you can't remember the ID
 - **Import existing identity** — bootstrap a profile from your current git config in one command
 - **Edit, rename, remove** — full profile lifecycle management
-- **Shell completions** — bash, zsh, fish, and PowerShell
+- **Shell completions** — bash, zsh, and fish
 - **Zero runtime dependencies** — single static binary, no runtime required
 
 ---
@@ -173,10 +173,7 @@ Resolution order:
 
 Profiles are stored in a JSON file at:
 
-| Platform      | Path                                                                                         |
-| ------------- | -------------------------------------------------------------------------------------------- |
-| macOS / Linux | `$XDG_CONFIG_HOME/git-profile/config.json` (defaults to `~/.config/git-profile/config.json`) |
-| Windows       | `%AppData%\git-profile\config.json`                                                          |
+Profiles are stored at `$XDG_CONFIG_HOME/git-profile/config.json` (defaults to `~/.config/git-profile/config.json`).
 
 Override the path with `--config`:
 
@@ -220,9 +217,6 @@ git-profile completion zsh > "${fpath[1]}/_git-profile"
 
 # fish
 git-profile completion fish > ~/.config/fish/completions/git-profile.fish
-
-# PowerShell
-git-profile completion powershell | Out-String | Invoke-Expression
 ```
 
 ---

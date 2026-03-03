@@ -28,7 +28,7 @@ var (
 	Bold    = lipgloss.NewStyle().Bold(true)
 
 	// ActiveMarker is the bullet shown next to the current profile.
-	ActiveMarker = Success.Copy().Bold(true).Render("●")
+	ActiveMarker = lipgloss.NewStyle().Foreground(colorSuccess).Bold(true).Render("●")
 )
 
 // Successf prints a styled success message to stdout.

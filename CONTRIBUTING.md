@@ -221,13 +221,12 @@ This triggers `.github/workflows/release.yml`, which:
 
 1. Runs the full test suite
 2. Builds binaries for all platforms (linux/amd64, linux/arm64, linux/armv7,
-   darwin/amd64, darwin/arm64, windows/amd64)
+   darwin/amd64, darwin/arm64)
 3. Creates GitHub Release with checksums
-4. Publishes archives (`.tar.gz` / `.zip`)
+4. Publishes archives (`.tar.gz`)
 5. Publishes `.deb` and `.rpm` packages
 6. Updates the Homebrew formula (macOS + Linux)
-7. Updates the Scoop bucket (Windows) — if `SCOOP_BUCKET_TOKEN` is set
-8. Publishes to AUR (Arch Linux) — if `AUR_KEY` is set
+7. Publishes to AUR (Arch Linux) — if `AUR_KEY` is set
 
 ---
 
@@ -238,7 +237,6 @@ Add these under **Settings → Secrets and variables → Actions**:
 | Secret | Required | Description |
 |---|---|---|
 | `HOMEBREW_TAP_TOKEN` | Recommended | PAT with `repo` write access to `hapiio/homebrew-tap` |
-| `SCOOP_BUCKET_TOKEN` | Optional | PAT with `repo` write access to `hapiio/scoop-bucket` |
 | `AUR_KEY` | Optional | Base64-encoded ed25519 private key registered on AUR |
 | `CODECOV_TOKEN` | Optional | Codecov upload token for coverage reporting |
 

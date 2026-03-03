@@ -1,0 +1,67 @@
+site_name: git-profile
+site_description: Switch between multiple git identities with a single command
+site_url: https://hapiio.github.io/git-profile
+repo_url: https://github.com/hapiio/git-profile
+repo_name: hapiio/git-profile
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  logo: images/logo.png
+  favicon: images/logo.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.tabs.link
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage:
+      - Quick Start: usage/quickstart.md
+      - Command Reference: usage/commands.md
+  - Guides:
+      - GPG Commit Signing: guides/gpg.md
+      - Auto-Apply Hooks: guides/hooks.md
+  - Configuration: configuration.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/hapiio/git-profile

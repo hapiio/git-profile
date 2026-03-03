@@ -33,7 +33,7 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_
       {{- .Os }}_
@@ -92,10 +92,9 @@ brews:
       system "#{bin}/git-profile", "version"
     install: |
       bin.install "git-profile"
-      # Shell completions
-      bash_completion.install Utils.safe_popen_read(bin/"git-profile", "completion", "bash") => "git-profile"
-      zsh_completion.install Utils.safe_popen_read(bin/"git-profile", "completion", "zsh") => "_git-profile"
-      fish_completion.install Utils.safe_popen_read(bin/"git-profile", "completion", "fish") => "git-profile.fish"
+      # generate_completions_from_executable runs `git-profile completion <shell>`
+      # and writes the output to the correct Homebrew completion directory.
+      generate_completions_from_executable(bin/"git-profile", "completion")
 
 # ── Arch Linux: AUR ──────────────────────────────────────────────────────
 aurs:

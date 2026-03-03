@@ -4,12 +4,40 @@
 package cmd_test
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/hapiio/git-profile/cmd"
 	"github.com/hapiio/git-profile/internal/config"
 )
+
+// initGitRepo creates a temporary directory, runs git init inside it, and
+// sets a minimal local git identity so git operations succeed.
+func initGitRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := exec.Command("git", "init", dir).Run(); err != nil {
+		t.Skipf("git not available: %v", err)
+	}
+	exec.Command("git", "-C", dir, "config", "user.name", "Test User").Run()        //nolint:errcheck
+	exec.Command("git", "-C", dir, "config", "user.email", "test@example.com").Run() //nolint:errcheck
+	return dir
+}
+
+// chdir changes the working directory for the test and restores it via t.Cleanup.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(orig) }) //nolint:errcheck
+}
 
 // run executes git-profile with --config <cfgPath> prepended to args.
 func run(t *testing.T, cfgPath string, args ...string) error {
@@ -281,4 +309,213 @@ func TestRename_TargetExists_Errors(t *testing.T) {
 func TestVersion_NoError(t *testing.T) {
 	cfg := tmpCfg(t)
 	mustRun(t, cfg, "version")
+}
+
+// ---- current ----
+
+func TestCurrent_NotInRepo_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	chdir(t, t.TempDir()) // plain directory, not a git repo
+	err := run(t, cfg, "current")
+	if err == nil {
+		t.Fatal("current outside git repo should error, got nil")
+	}
+}
+
+func TestCurrent_InRepo_NoError(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	chdir(t, dir)
+	mustRun(t, cfg, "current")
+}
+
+func TestCurrent_InRepo_WithMatchedProfile_NoError(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	// Add a profile that matches the git identity set by initGitRepo.
+	mustRun(t, cfg, "add", "--id", "test", "--name", "Test User", "--email", "test@example.com")
+	chdir(t, dir)
+	mustRun(t, cfg, "current")
+}
+
+// ---- use ----
+
+func TestUse_NotFound_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	err := run(t, cfg, "use", "ghost")
+	if err == nil {
+		t.Fatal("use of nonexistent profile should error, got nil")
+	}
+}
+
+func TestUse_NotInRepo_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	chdir(t, t.TempDir())
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com")
+	err := run(t, cfg, "use", "work")
+	if err == nil {
+		t.Fatal("use without --global outside git repo should error, got nil")
+	}
+}
+
+func TestUse_InRepo_Success(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane Dev", "--email", "jane@co.com")
+	chdir(t, dir)
+	mustRun(t, cfg, "use", "work")
+}
+
+func TestUse_InRepo_WithSSHKey_Success(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	mustRun(t, cfg, "add", "--id", "oss", "--name", "Dev", "--email", "dev@oss.org", "--ssh-key", "~/.ssh/id_oss")
+	chdir(t, dir)
+	mustRun(t, cfg, "use", "oss")
+}
+
+// ---- set-default ----
+
+func TestSetDefault_NotFound_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	err := run(t, cfg, "set-default", "ghost")
+	if err == nil {
+		t.Fatal("set-default of nonexistent profile should error, got nil")
+	}
+}
+
+func TestSetDefault_NotInRepo_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	chdir(t, t.TempDir())
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com")
+	err := run(t, cfg, "set-default", "work")
+	if err == nil {
+		t.Fatal("set-default without --global outside git repo should error, got nil")
+	}
+}
+
+func TestSetDefault_InRepo_Success(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com")
+	chdir(t, dir)
+	mustRun(t, cfg, "set-default", "work")
+}
+
+// ---- ensure ----
+
+func TestEnsure_NoProfiles_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	// empty config — no profiles at all
+	err := run(t, cfg, "ensure")
+	if err == nil {
+		t.Fatal("ensure with no profiles should error, got nil")
+	}
+}
+
+func TestEnsure_NoDefault_NoTTY_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	// Use a unique ID that won't match any real gitprofile.default in the user's
+	// git config, so both local and global default lookups fall through.
+	mustRun(t, cfg, "add", "--id", "norealdeffound", "--name", "Jane", "--email", "jane@co.com")
+	// Chdir to a plain dir (not a git repo) so git.GetConfig returns an error
+	// and cannot pick up a local gitprofile.default from the project repo.
+	chdir(t, t.TempDir())
+	err := run(t, cfg, "ensure")
+	if err == nil {
+		t.Fatal("ensure with no matching default and no TTY should error, got nil")
+	}
+}
+
+func TestEnsure_WithLocalDefault_InRepo_Success(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com")
+	chdir(t, dir)
+	mustRun(t, cfg, "set-default", "work")
+	mustRun(t, cfg, "ensure")
+}
+
+// ---- install-hooks ----
+
+func TestInstallHooks_NotInRepo_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	chdir(t, t.TempDir())
+	err := run(t, cfg, "install-hooks")
+	if err == nil {
+		t.Fatal("install-hooks outside git repo should error, got nil")
+	}
+}
+
+func TestInstallHooks_InRepo_CreatesHooks(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	chdir(t, dir)
+	mustRun(t, cfg, "install-hooks")
+
+	for _, hookName := range []string{"prepare-commit-msg", "pre-push"} {
+		hookPath := filepath.Join(dir, ".git", "hooks", hookName)
+		if _, err := os.Stat(hookPath); os.IsNotExist(err) {
+			t.Errorf("hook %q was not created at %s", hookName, hookPath)
+		}
+	}
+}
+
+func TestInstallHooks_Idempotent(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	chdir(t, dir)
+	// Running twice should not error (second run updates existing hooks).
+	mustRun(t, cfg, "install-hooks")
+	mustRun(t, cfg, "install-hooks")
+}
+
+// ---- import ----
+
+func TestImport_InRepo_WithID_Success(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	chdir(t, dir)
+	mustRun(t, cfg, "import", "--id", "imported")
+
+	p := loadCfg(t, cfg).Profiles["imported"]
+	if p.GitUser != "Test User" {
+		t.Errorf("GitUser = %q, want %q", p.GitUser, "Test User")
+	}
+	if p.GitEmail != "test@example.com" {
+		t.Errorf("GitEmail = %q, want %q", p.GitEmail, "test@example.com")
+	}
+}
+
+func TestImport_NoID_NonTTY_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	chdir(t, dir)
+	// Cobra reuses the command struct between RunArgs calls and pflag does not
+	// reset flag variables to their defaults between executions. Pass --id ""
+	// explicitly so the id variable is written as empty regardless of prior state.
+	err := run(t, cfg, "import", "--id", "")
+	if err == nil {
+		t.Fatal("import with empty --id in non-TTY should error, got nil")
+	}
+}
+
+func TestImport_DuplicateID_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	dir := initGitRepo(t)
+	chdir(t, dir)
+	mustRun(t, cfg, "import", "--id", "imported")
+	err := run(t, cfg, "import", "--id", "imported")
+	if err == nil {
+		t.Fatal("import with duplicate profile ID should error, got nil")
+	}
+}
+
+func TestImport_NotInRepo_Errors(t *testing.T) {
+	cfg := tmpCfg(t)
+	chdir(t, t.TempDir())
+	err := run(t, cfg, "import", "--id", "x")
+	if err == nil {
+		t.Fatal("import outside git repo (without --global) should error, got nil")
+	}
 }

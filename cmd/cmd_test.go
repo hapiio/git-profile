@@ -361,7 +361,10 @@ func TestUse_NotInRepo_Errors(t *testing.T) {
 func TestUse_InRepo_Success(t *testing.T) {
 	cfg := tmpCfg(t)
 	dir := initGitRepo(t)
-	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane Dev", "--email", "jane@co.com")
+	// --gpg-key "" resets the pflag variable so GPG settings from earlier tests
+	// (cobra reuses the command struct and pflag does not reset between Execute calls)
+	// don't leak into this profile and get applied to a git repo.
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane Dev", "--email", "jane@co.com", "--gpg-key", "")
 	chdir(t, dir)
 	mustRun(t, cfg, "use", "work")
 }
@@ -369,7 +372,7 @@ func TestUse_InRepo_Success(t *testing.T) {
 func TestUse_InRepo_WithSSHKey_Success(t *testing.T) {
 	cfg := tmpCfg(t)
 	dir := initGitRepo(t)
-	mustRun(t, cfg, "add", "--id", "oss", "--name", "Dev", "--email", "dev@oss.org", "--ssh-key", "~/.ssh/id_oss")
+	mustRun(t, cfg, "add", "--id", "oss", "--name", "Dev", "--email", "dev@oss.org", "--ssh-key", "~/.ssh/id_oss", "--gpg-key", "")
 	chdir(t, dir)
 	mustRun(t, cfg, "use", "oss")
 }
@@ -397,7 +400,7 @@ func TestSetDefault_NotInRepo_Errors(t *testing.T) {
 func TestSetDefault_InRepo_Success(t *testing.T) {
 	cfg := tmpCfg(t)
 	dir := initGitRepo(t)
-	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com")
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com", "--gpg-key", "")
 	chdir(t, dir)
 	mustRun(t, cfg, "set-default", "work")
 }
@@ -430,7 +433,7 @@ func TestEnsure_NoDefault_NoTTY_Errors(t *testing.T) {
 func TestEnsure_WithLocalDefault_InRepo_Success(t *testing.T) {
 	cfg := tmpCfg(t)
 	dir := initGitRepo(t)
-	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com")
+	mustRun(t, cfg, "add", "--id", "work", "--name", "Jane", "--email", "jane@co.com", "--gpg-key", "")
 	chdir(t, dir)
 	mustRun(t, cfg, "set-default", "work")
 	mustRun(t, cfg, "ensure")

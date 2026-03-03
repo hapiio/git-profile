@@ -18,26 +18,33 @@ Download the latest binary for your platform from the [Releases](https://github.
 
 ### macOS (Apple Silicon)
 
+
  ```bash
 curl -L https://github.com/hapiio/git-profile/releases/latest/download/git-profile_darwin_arm64.tar.gz \
       | tar -xz && mv git-profile /usr/local/bin/
 ```
 
+
 ### macOS (Intel)
+
 
 ```bash
 curl -L https://github.com/hapiio/git-profile/releases/latest/download/git-profile_darwin_x86_64.tar.gz \
       | tar -xz && mv git-profile /usr/local/bin/
 ```
 
+
 ### Linux (amd64)
+
 
 ```bash
 curl -L https://github.com/hapiio/git-profile/releases/latest/download/git-profile_linux_x86_64.tar.gz \
       | tar -xz && mv git-profile /usr/local/bin/
 ```
 
+
 ### Linux (arm64)
+
 
 ```bash
 curl -L https://github.com/hapiio/git-profile/releases/latest/download/git-profile_linux_arm64.tar.gz \
